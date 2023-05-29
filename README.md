@@ -80,5 +80,4 @@ If the filename contains spaces, make sure that is it enclosed in quotes. The sc
 
 TODOs:
 + server is currently not multi-threaded (i.e., a new thread should be created when a request is being processed)
-+ Resume Functionality in case there is already some data downloaded
 + getAll function to retrieve everything from the server

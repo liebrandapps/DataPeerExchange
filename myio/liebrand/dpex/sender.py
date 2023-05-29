@@ -162,6 +162,7 @@ class Sender:
             if req['op'] == 'ls':
                 self.processls(key, c, serverSocket, addr)
             if req['op'] == 'get':
+                c['clientSize'] = req['clientSize']
                 self.processget(key, c, serverSocket, addr, req['file'])
             if req['op'] == 'ack':
                 self.rcvCnt += 1
@@ -204,7 +205,7 @@ class Sender:
             else:
                 c['getinProgress'] = True
                 c['file'] = fileName
-                c['fileHolder'] = FileHolderServer(path, 0, os.path.getsize(path), self.cfg, self.log)
+                c['fileHolder'] = FileHolderServer(path, c['clientSize'], os.path.getsize(path), self.cfg, self.log)
         fileHolder = c['fileHolder']
         dta = {}
         dta['status'] = 'ok'
@@ -212,9 +213,12 @@ class Sender:
         path = os.path.join(c['outgoing'], fileName)
         dta['totalSize'] = os.path.getsize(path)
         dta['size'] = fileHolder.chunkSize
-        estChunkCount = int(dta['totalSize'] / dta['size'])
+        estChunkCount = int((dta['totalSize'] - c['clientSize']) / dta['size'])
         if logInfo:
-            self.log.debug(f"Sending file {path} with size {dta['totalSize']} in {estChunkCount} pieces.")
+            if c['clientSize'] == 0:
+                self.log.debug(f"Sending file {path} with size {dta['totalSize']} in {estChunkCount} pieces.")
+            else:
+                self.log.debug(f"Resuming file {path} with remaing size {dta['totalSize']-c['clientSize']} in {estChunkCount} pieces.")
         if fileHolder.reachedTimeout():
             self.log.error("Client disappeared, cancelling transmission")
             c['getinProgress'] = False
