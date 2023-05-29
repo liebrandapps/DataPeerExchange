@@ -1,3 +1,9 @@
+'''
+  Mark Liebrand 2023
+  This file is part of DataPeerExchange which is released under the Apache 2.0 License
+  See file LICENSE or go to for full license details https://github.com/liebrandapps/DataPeerExchange
+'''
+
 import base64
 import datetime
 import glob
@@ -6,12 +12,14 @@ import json
 import os
 import secrets
 import socket
+import time
 from pathlib import Path
 
 from Crypto import Random
 from Crypto.Cipher import PKCS1_OAEP, AES
 from Crypto.PublicKey import RSA
 
+from myio.liebrand.dpex.fileholder import FileHolderServer
 from myio.liebrand.dpex.utility import ReadDictionary, SockRead, SockWrite
 
 
@@ -20,10 +28,16 @@ class Sender:
     OP_ADD = "add"
     PRIVATE_KEY = "id_rsa"
     PUBLIC_KEY = "id_rsa.pub"
+    BS = 16
+    pad = lambda s: s + (Sender.BS - len(s) % Sender.BS) * chr(Sender.BS - len(s) % Sender.BS).encode('UTF-8')
 
     def __init__(self, cfg, log):
         self.cfg = cfg
         self.log = log
+        self.timePerChunk = None
+        self.delay = 0.0
+        self.sndCnt = 0
+        self.rcvCnt = 0
 
     def op(self, op, data=None):
         if op == Sender.OP_INIT:
@@ -111,11 +125,18 @@ class Sender:
         self.log.info("Starting server")
         clients = self.loadClientConfigs()
         serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        serverSocket.bind(('0.0.0.0', 4488))
+        serverSocket.bind(('0.0.0.0', self.cfg.general_serverPort))
+        serverSocket.settimeout(1.0)
         while True:
-            msg, addr = serverSocket.recvfrom(1024)
-            if len(msg) < 33:
+            try:
+                msg, addr = serverSocket.recvfrom(1024)
+            except socket.timeout:
+                for c in clients.values():
+                    if c['getinProgress']:
+                        key = bytes.fromhex(c['aes'])
+                        self.processget(key, c, serverSocket, addr, c['file'])
                 continue
+            match = False
             for c in clients.values():
                 match = True
                 for idx in range(8):
@@ -134,36 +155,121 @@ class Sender:
             key = bytes.fromhex(c['aes'])
             cipher = AES.new(key, AES.MODE_CBC, iv)
             decData = cipher.decrypt(encData)
-            BS = 16
             unpad = lambda s: s[:-ord(s[len(s) - 1:])]
             raw = unpad(decData)
             req = json.loads(raw)
             rsp = {}
             if req['op'] == 'ls':
-                root = self.cfg.general_clientRoot
-                files = glob.glob(c['outgoing'] + "/*")
-                print(files)
-                list = {}
-                for f in files:
-                    baseFName = os.path.basename(f)
-                    stat = Path(f).stat()
-                    info = {'size': stat.st_size, 'mtime': stat.st_mtime}
-                    list[baseFName] = info
-                strg = json.dumps(list)
-                bts = strg.encode('UTF-8')
-                pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS).encode('UTF-8')
-                raw = pad(bts)
-                iv = Random.new().read(AES.block_size)
-                cipher = AES.new(key, AES.MODE_CBC, iv)
-                cipherText = cipher.encrypt(raw)
-                sockWt = SockWrite()
-                buffer = io.BytesIO()
-                buffer.write(iv)
-                sockWt.writeLongDirect(len(cipherText), buffer)
-                buffer.write(cipherText)
-                serverSocket.sendto(buffer.getbuffer(), addr)
+                self.processls(key, c, serverSocket, addr)
+            if req['op'] == 'get':
+                self.processget(key, c, serverSocket, addr, req['file'])
+            if req['op'] == 'ack':
+                self.rcvCnt += 1
+                self.processack(key, c, serverSocket, addr, req['ack'], req['nxt'])
+                if 'perf' in req.keys() and self.timePerChunk is not None:
+                    # print(f"Time per Chunk on Server {self.timePerChunk}, on Client {req['perf']}")
+                    if self.timePerChunk < (req['perf'] + 25):
+                        self.delay += 25
+                    else:
+                        self.delay -= 25
+                        if self.delay < 0:
+                            self.delay = 0
 
         self.log.info("Terminating server")
+
+    def processls(self, key, c, serverSocket, addr):
+        self.log.info("Processing command 'ls'")
+        files = glob.glob(c['outgoing'] + "/*")
+        list = {}
+        for f in files:
+            baseFName = os.path.basename(f)
+            stat = Path(f).stat()
+            info = {'size': stat.st_size, 'mtime': stat.st_mtime}
+            list[baseFName] = info
+        self.sendEncryptedResponse(list, key, serverSocket, addr)
+
+    def processget(self, key, c, serverSocket, addr, fileName):
+        logInfo = False
+        if not c['getinProgress']:
+            self.log.info("Processing command 'get'")
+            logInfo = True
+            path = os.path.join(c['outgoing'], fileName)
+            if not os.path.exists(path):
+                dta = {}
+                dta['status'] = 'fail'
+                dta['msg'] = f"File '{fileName}' does not exist"
+                self.sendEncryptedResponse(dta, key, serverSocket, addr)
+                self.log.warn(dta['msg'])
+                return
+            else:
+                c['getinProgress'] = True
+                c['file'] = fileName
+                c['fileHolder'] = FileHolderServer(path, 0, os.path.getsize(path), self.cfg, self.log)
+        fileHolder = c['fileHolder']
+        dta = {}
+        dta['status'] = 'ok'
+        dta['op'] = "chunk"
+        path = os.path.join(c['outgoing'], fileName)
+        dta['totalSize'] = os.path.getsize(path)
+        dta['size'] = fileHolder.chunkSize
+        estChunkCount = int(dta['totalSize'] / dta['size'])
+        if logInfo:
+            self.log.debug(f"Sending file {path} with size {dta['totalSize']} in {estChunkCount} pieces.")
+        if fileHolder.reachedTimeout():
+            self.log.error("Client disappeared, cancelling transmission")
+            c['getinProgress'] = False
+            del c['file']
+            del c['fileHolder']
+            return
+        interval = 0
+        start = datetime.datetime.now()
+        self.delay = 0
+        while interval < 100:
+            nxt, chunk = fileHolder.getNextPart()
+            if nxt is None:
+                c['getinProgress'] = False
+                del c['file']
+                del c['fileHolder']
+                self.log.debug(f"Done with sending file {path}")
+                break
+            dta['idx'] = nxt
+            self.sndCnt += 1
+            dta['sndCnt'] = self.sndCnt
+            dta['rcvCnt'] = self.rcvCnt
+            strg = json.dumps(dta)
+            bts = strg.encode('UTF-8')
+            sockWt = SockWrite()
+            buffer = io.BytesIO()
+            sockWt.writeLongDirect(len(bts), buffer)
+            buffer.write(bts)
+            buffer.write(chunk)
+            raw = Sender.pad(buffer.getbuffer().tobytes())
+            iv = Random.new().read(AES.block_size)
+            cipher = AES.new(key, AES.MODE_CBC, iv)
+            cipherText = cipher.encrypt(raw)
+            sockWt = SockWrite()
+            buffer = io.BytesIO()
+            buffer.write(iv)
+            sockWt.writeLongDirect(len(cipherText), buffer)
+            buffer.write(cipherText)
+            serverSocket.sendto(buffer.getbuffer(), addr)
+            interval += 1
+            if self.delay > 0.0:
+                time.sleep(self.delay / 1000000)
+        if interval != 0:
+            self.timePerChunk = (datetime.datetime.now() - start).microseconds / interval
+        else:
+            self.timePerChunk = None
+
+        # self.log.debug(f"Send {interval} chunks to {addr}")
+
+    def processack(self, key, c, serverSocket, addr, ack, nxtIdx):
+        # self.log.debug("processAck")
+        if not c['getinProgress']:
+            return
+        fileHolder = c['fileHolder']
+        fileHolder.ack(ack, nxtIdx)
+        self.processget(key, c, serverSocket, addr, c['file'])
 
     def loadClientConfigs(self):
         clients = {}
@@ -179,6 +285,21 @@ class Sender:
                 data['clientKey'] = keydata
                 data['magicHeaderBytes'] = bytes.fromhex(data['magicHeader'])
                 data['outgoing'] = os.path.join(dirpath, dirName, 'outgoing')
+                data['getinProgress'] = False
                 clients[dirName] = data
             break
         return clients
+
+    def sendEncryptedResponse(self, jsonData, key, serverSocket, addr):
+        strg = json.dumps(jsonData)
+        bts = strg.encode('UTF-8')
+        raw = Sender.pad(bts)
+        iv = Random.new().read(AES.block_size)
+        cipher = AES.new(key, AES.MODE_CBC, iv)
+        cipherText = cipher.encrypt(raw)
+        sockWt = SockWrite()
+        buffer = io.BytesIO()
+        buffer.write(iv)
+        sockWt.writeLongDirect(len(cipherText), buffer)
+        buffer.write(cipherText)
+        serverSocket.sendto(buffer.getbuffer(), addr)

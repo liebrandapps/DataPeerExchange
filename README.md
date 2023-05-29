@@ -58,9 +58,29 @@ The received JSON data should be saved to a file (e.g. sampleServer.json).
 
 Now the client is configured to run with the server.
 
-Step 5 [Client]:
+Step 5 [Server]:
+Start the server with parameter "serve" and leave it running:
+
+    python3 myio/liebrand/dpex/server.py serve
+
+
+Step 6 [Client]:
 Retrieve list of available files:
 
     python3 myio/liebrand/dpex/client.py ls
 
-... to be continued ...
+(Needless to say that the server needs to be running on the other end (Step 5))
+
+Step 7 [Client]:
+Get a file
+
+    python3 myio/liebrand/dpex/client.py get filename
+    
+If the filename contains spaces, make sure that is it enclosed in quotes. The script 'dpexClient.sh' can also be used,
+however it cannot handle filenames with spaces.
+
+TODOs:
++ server is currently not multi-threaded (i.e., a new thread should be created when a request is being processed)
++ Resume Functionality in case there is already some data downloaded
++ Integrity Check of the file using a hash function
++ getAll function to retrieve everything from the server

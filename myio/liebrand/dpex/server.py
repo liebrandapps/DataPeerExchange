@@ -1,3 +1,9 @@
+'''
+  Mark Liebrand 2023
+  This file is part of DataPeerExchange which is released under the Apache 2.0 License
+  See file LICENSE or go to for full license details https://github.com/liebrandapps/DataPeerExchange
+'''
+
 import json
 import logging
 import sys
@@ -43,6 +49,9 @@ if __name__ == "__main__":
             "keyBits": ["Integer", 4096],
             "serverHost": ["String", None],
             "serverPort": ["Integer", 0],
+            "chunkSize": ["Integer", 768],
+            "maxChunks": ["Integer", 100000],
+            "timeout": ["Integer", 30]
         },
         "logging": {
             "logFile": ["String", "/tmp/dpexServer.log"],

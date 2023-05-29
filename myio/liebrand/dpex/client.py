@@ -4,8 +4,6 @@
   See file LICENSE or go to for full license details https://github.com/liebrandapps/DataPeerExchange
 '''
 
-
-
 import json
 import logging
 import sys
@@ -49,6 +47,7 @@ if __name__ == "__main__":
             "exchangeKeyDir": ["String", "./clientKey"],
             "uidFile": ["String", "uid.txt"],
             "keyBits": ["Integer", 4096],
+            "incomingDir": ["String", "./incoming"]
         },
         "logging": {
             "logFile": ["String", "/tmp/dpexClient.log"],
@@ -69,7 +68,7 @@ if __name__ == "__main__":
 
     rcv = Receiver(cfg, log)
 
-    if len(sys.argv)<2:
+    if len(sys.argv) < 2:
         print("You must provide at least on argument as operation")
         sys.exit(-1)
 
@@ -79,12 +78,12 @@ if __name__ == "__main__":
         rcv.op("init")
 
     if op.lower() == "update":
-        if len(sys.argv)<3:
+        if len(sys.argv) < 3:
             print("'update' requires name of json file as argument")
             sys.exit(-1)
 
         flName = sys.argv[2]
-        if not(exists(flName)):
+        if not (exists(flName)):
             print(f"File {flName} does not exist")
             sys.exit(-1)
 
@@ -95,3 +94,12 @@ if __name__ == "__main__":
     if op.lower() == "ls":
         rcv.op("ls")
 
+    if op.lower() == "get":
+        rcv.op("get", sys.argv[2:])
+
+    if op.lower() == "update":
+        if len(sys.argv) < 3:
+            print("'update' requires at least one file name as argument")
+            sys.exit(-1)
+
+        rcv.op("get", sys.argv[2:])
