@@ -76,11 +76,9 @@ Get a file
 
     python3 myio/liebrand/dpex/client.py get filename
     
-If the filename contains spaces, make sure that is it enclosed in quotes. The script 'dpexClient.sh' can also be used,
-however it cannot handle filenames with spaces.
+If the filename contains spaces, make sure that is it enclosed in quotes. The script 'dpexClient.sh' can also be used.
 
 TODOs:
 + server is currently not multi-threaded (i.e., a new thread should be created when a request is being processed)
 + Resume Functionality in case there is already some data downloaded
-+ Integrity Check of the file using a hash function
 + getAll function to retrieve everything from the server

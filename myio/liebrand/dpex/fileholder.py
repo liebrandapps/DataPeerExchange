@@ -4,7 +4,9 @@
   See file LICENSE or go to for full license details https://github.com/liebrandapps/DataPeerExchange
 """
 import datetime
+import hashlib
 import os.path
+import threading
 
 
 class FileHolderClient:
@@ -21,6 +23,7 @@ class FileHolderClient:
         self.datedCount = 0
         self.effPos = 0
         self.chunkSize = 0
+        self.md5Svr = None
 
     def addChunk(self, index, chunk, totalSize=None):
         if totalSize is not None:
@@ -43,15 +46,18 @@ class FileHolderClient:
             with open(self.fileName, 'ab') as fp:
                 i = self.writeIndex
                 while i < idx:
-                    fp.write(self.pieces[i])
-                    self.effPos += len(self.pieces[i])
+                    dta = self.pieces[i]
+                    fp.write(dta)
+                    self.effPos += len(dta)
                     del self.pieces[i]
                     i += 1
             self.writeIndex = idx
             self.lastSize = os.path.getsize(self.fileName)
+            """
             if self.counter == 0:
                 print(
                     f"Length of writeout queue {len(self.pieces.keys())}, next piece {self.writeIndex}, dated pieces {self.datedCount}")
+            """
             self.datedCount = 0
         self.counter = FileHolderClient.COLLECT_COUNT
 
@@ -70,6 +76,19 @@ class FileHolderClient:
     def getKeptInMemory(self):
         return int((self.chunkSize * len(self.pieces.keys())) / self.totalSize * 100)
 
+    def md5Ok(self):
+        if self.md5Svr is None:
+            return "Cannot verify the integrity of the file as no md5 sum has been received from the server"
+        hash_md5 = hashlib.md5()
+        with open(self.fileName, "rb") as f:
+            for chunk in iter(lambda: f.read(self.chunkSize), b""):
+                hash_md5.update(chunk)
+        md5sum = hash_md5.hexdigest()
+        if self.md5Svr == md5sum:
+            return "Integrity of the file is ok, checksums do match"
+        else:
+            return "Checksum mismatch, file maybe corrupt"
+
 
 class FileHolderServer:
 
@@ -85,6 +104,9 @@ class FileHolderServer:
         self.lastAck = None
         self.fileSize = fileSize
         self.requestedNext = None
+        self.md5sum = None
+        calcThread = threading.Thread(target=self.calcHash)
+        calcThread.start()
 
     def fillPieces(self):
         if len(self.queue) > int(self.cfg.general_maxChunks / 2):
@@ -139,3 +161,10 @@ class FileHolderServer:
             return False
         elapsed = (datetime.datetime.now() - self.lastAck).total_seconds()
         return elapsed > self.cfg.general_timeout
+
+    def calcHash(self):
+        hash_md5 = hashlib.md5()
+        with open(self.fileName, "rb") as f:
+            for chunk in iter(lambda: f.read(self.chunkSize), b""):
+                hash_md5.update(chunk)
+        self.md5sum = hash_md5.hexdigest()

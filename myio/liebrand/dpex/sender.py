@@ -234,8 +234,11 @@ class Sender:
                 break
             dta['idx'] = nxt
             self.sndCnt += 1
-            dta['sndCnt'] = self.sndCnt
-            dta['rcvCnt'] = self.rcvCnt
+            if interval == 0:
+                dta['sndCnt'] = self.sndCnt
+                dta['rcvCnt'] = self.rcvCnt
+                if fileHolder.md5sum is not None:
+                    dta['md5'] = fileHolder.md5sum
             strg = json.dumps(dta)
             bts = strg.encode('UTF-8')
             sockWt = SockWrite()

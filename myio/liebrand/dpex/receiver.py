@@ -243,6 +243,8 @@ class Receiver:
                                 print(
                                     f"Incoming packets Client received {rcvCnt} of {rsp['sndCnt']}, Server received Ack packets {rsp['rcvCnt']} of {sndCnt}")
                             """
+                            if 'md5' in rsp.keys():
+                                fileHolder.md5Svr = rsp['md5']
                             fileData = rawData[4+dctLength:]
                             fileHolder.addChunk(partIdx, fileData, totalSize=totalSize)
                             done = fileHolder.isComplete()
@@ -267,11 +269,14 @@ class Receiver:
                                 fileHolder.clearAck()
 
                                 self.printProgress(fileHolder.getWrittenToDisk(), fileHolder.getKeptInMemory())
+
                 cnt -= 1
                 if cnt == 0:
                     timeNeeded = (datetime.datetime.now() - start).microseconds / 1000
                     cnt = 1000
-        print()
+            print()
+            self.log.info("Checking Integrity:")
+            self.log.info(fileHolder.md5Ok())
         self.log.info("Done w/ requesting files from server")
 
     def __encHelper(self, key, encDataJson):
