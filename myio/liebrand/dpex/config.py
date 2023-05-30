@@ -1,8 +1,8 @@
-'''
+"""
   Mark Liebrand 2023
   This file is part of DataPeerExchange which is released under the Apache 2.0 License
   See file LICENSE or go to for full license details https://github.com/liebrandapps/DataPeerExchange
-'''
+"""
 
 from configparser import RawConfigParser
 

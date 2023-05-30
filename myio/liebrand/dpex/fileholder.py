@@ -53,11 +53,8 @@ class FileHolderClient:
                     i += 1
             self.writeIndex = idx
             self.lastSize = os.path.getsize(self.fileName)
-            """
-            if self.counter == 0:
-                print(
-                    f"Length of writeout queue {len(self.pieces.keys())}, next piece {self.writeIndex}, dated pieces {self.datedCount}")
-            """
+            """if self.counter == 0: print( f"Length of writeout queue {len(self.pieces.keys())}, next piece {
+            self.writeIndex}, dated pieces {self.datedCount}") """
             self.datedCount = 0
         self.counter = FileHolderClient.COLLECT_COUNT
 

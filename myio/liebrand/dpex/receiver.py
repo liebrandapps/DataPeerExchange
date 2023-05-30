@@ -1,8 +1,8 @@
-'''
+"""
   Mark Liebrand 2023
   This file is part of DataPeerExchange which is released under the Apache 2.0 License
   See file LICENSE or go to for full license details https://github.com/liebrandapps/DataPeerExchange
-'''
+"""
 
 import base64
 import datetime
@@ -30,6 +30,7 @@ class Receiver:
     OP_UPDATE = "update"
     OP_LS = "ls"
     OP_GET = "get"
+    OP_GET_ALL = "getall"
 
     def __init__(self, cfg, log):
         self.cfg = cfg
@@ -54,6 +55,10 @@ class Receiver:
 
         if op == Receiver.OP_GET:
             self.get(data)
+
+        if op ==Receiver.OP_GET_ALL:
+            self.getAll()
+
 
     def getKey(self):
         if not (os.path.isdir(self.cfg.general_exchangeKeyDir)):
@@ -98,8 +103,7 @@ class Receiver:
         self.log.info("Creating config for server based on received data.")
         serverPublicKeyStrg = data["publicKey"]
         encData = data['encData']
-        cfgData = {}
-        cfgData['serverPublicKey'] = serverPublicKeyStrg
+        cfgData = {'serverPublicKey': serverPublicKeyStrg}
         key = self.getKey()
         bytes = base64.b64decode(encData)
         privKey = PKCS1_OAEP.new(key)
@@ -118,14 +122,7 @@ class Receiver:
             f"available files with 'client.py ls")
         self.log.info(f"Config is stored in {Receiver.CONFIG}")
 
-    def ls(self):
-        self.log.info("Requesting list of files")
-        if not (os.path.exists(Receiver.CONFIG)):
-            self.log.error(
-                f"Config file {Receiver.CONFIG} does not exist, need to run client.py update <received server.json> "
-                f"first.")
-            sys.exit(-1)
-
+    def _ls(self):
         with open(Receiver.CONFIG) as fp:
             cfgData = json.load(fp)
 
@@ -148,8 +145,20 @@ class Receiver:
             msg, addr = clientSocket.recvfrom(1024)
         except socket.timeout:
             self.log.error("Server did not respond")
+            return None
+        return self.__decHelper(key, msg)
+
+    def ls(self):
+        self.log.info("Requesting list of files")
+        if not (os.path.exists(Receiver.CONFIG)):
+            self.log.error(
+                f"Config file {Receiver.CONFIG} does not exist, need to run client.py update <received server.json> "
+                f"first.")
+            sys.exit(-1)
+
+        rsp = self._ls()
+        if rsp is None:
             return
-        rsp = self.__decHelper(key, msg)
         self.log.info("=========================================================================")
         for f in rsp.keys():
             fData = rsp[f]
@@ -200,7 +209,7 @@ class Receiver:
             fileHolder = FileHolderClient(localFile)
             cnt = 1000
             start = datetime.datetime.now()
-            lastStat = start
+            #lastStat = start
             timeNeeded = None
             retry = 5
             rcvCnt = 0
@@ -228,21 +237,17 @@ class Receiver:
                     if rsp['status'] == 'fail':
                         msg = rsp['msg']
                         self.log.error(msg)
+                        done = True
                     else:
                         if "op" in rsp.keys() and rsp['op'] == "chunk":
                             partIdx = rsp['idx']
-                            partSize = rsp['size']
                             if "totalSize" in rsp.keys():
                                 totalSize = rsp['totalSize']
                             else:
                                 totalSize = None
-                            """
-                            now = datetime.datetime.now()
-                            if (now - lastStat).seconds > 30:
-                                lastStat = now
-                                print(
-                                    f"Incoming packets Client received {rcvCnt} of {rsp['sndCnt']}, Server received Ack packets {rsp['rcvCnt']} of {sndCnt}")
-                            """
+                            """now = datetime.datetime.now() if (now - lastStat).seconds > 30: lastStat = now print( 
+                            f"Incoming packets Client received {rcvCnt} of {rsp['sndCnt']}, Server received Ack 
+                            packets {rsp['rcvCnt']} of {sndCnt}") """
                             if 'md5' in rsp.keys():
                                 fileHolder.md5Svr = rsp['md5']
                             fileData = rawData[4+dctLength:]
@@ -279,7 +284,12 @@ class Receiver:
             self.log.info(fileHolder.md5Ok())
         self.log.info("Done w/ requesting files from server")
 
-    def __encHelper(self, key, encDataJson):
+    def getAll(self):
+        files = self._ls()
+        self.get(files)
+
+    @staticmethod
+    def __encHelper(key, encDataJson):
         strg = json.dumps(encDataJson)
         bts = strg.encode('UTF-8')
         BS = 16
@@ -290,7 +300,8 @@ class Receiver:
         cipherText = cipher.encrypt(raw)
         return iv, cipherText
 
-    def __decHelper(self, key, msg):
+    @staticmethod
+    def __decHelper(key, msg):
         sockRd = SockRead()
         iv = msg[:16]
         length = sockRd.readRawLong(msg[16:20])
@@ -301,7 +312,8 @@ class Receiver:
         raw = unpad(bts)
         return json.loads(raw)
 
-    def __decHelperRaw(self, key, msg):
+    @staticmethod
+    def __decHelperRaw(key, msg):
         sockRd = SockRead()
         iv = msg[:16]
         length = sockRd.readRawLong(msg[16:20])
@@ -312,7 +324,8 @@ class Receiver:
         raw = unpad(bts)
         return raw
 
-    def printProgress(self, percToDisk, percInMem):
+    @staticmethod
+    def printProgress(percToDisk, percInMem):
         line = []
         line.append("[")
         for idx in range(100):

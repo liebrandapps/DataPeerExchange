@@ -1,8 +1,8 @@
-'''
+"""
   Mark Liebrand 2023
   This file is part of DataPeerExchange which is released under the Apache 2.0 License
   See file LICENSE or go to for full license details https://github.com/liebrandapps/DataPeerExchange
-'''
+"""
 
 import json
 import logging
@@ -96,6 +96,9 @@ if __name__ == "__main__":
 
     if op.lower() == "get":
         rcv.op("get", sys.argv[2:])
+
+    if op.lower() == "getall":
+        rcv.op("getall")
 
     if op.lower() == "update":
         if len(sys.argv) < 3:

@@ -78,6 +78,11 @@ Get a file
     
 If the filename contains spaces, make sure that is it enclosed in quotes. The script 'dpexClient.sh' can also be used.
 
+In case all files shall be retrieved from the remote download directory, the client is
+to be started with 'getall' as parameter:
+
+    python3 myio/liebrand/dpex/client.py getall
+
+
 TODOs:
 + server is currently not multi-threaded (i.e., a new thread should be created when a request is being processed)
-+ getAll function to retrieve everything from the server

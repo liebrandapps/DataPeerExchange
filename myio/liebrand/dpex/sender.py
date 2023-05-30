@@ -191,34 +191,35 @@ class Sender:
 
     def processget(self, key, c, serverSocket, addr, fileName):
         logInfo = False
+        path = os.path.join(c['outgoing'], fileName)
         if not c['getinProgress']:
             self.log.info("Processing command 'get'")
             logInfo = True
-            path = os.path.join(c['outgoing'], fileName)
             if not os.path.exists(path):
-                dta = {}
-                dta['status'] = 'fail'
-                dta['msg'] = f"File '{fileName}' does not exist"
-                self.sendEncryptedResponse(dta, key, serverSocket, addr)
+                dta = {'status': 'fail', 'msg': f"File '{fileName}' does not exist"}
+                self.sendEncryptedResponse(dta, key, serverSocket, addr, useRaw=True)
                 self.log.warn(dta['msg'])
                 return
             else:
-                c['getinProgress'] = True
-                c['file'] = fileName
-                c['fileHolder'] = FileHolderServer(path, c['clientSize'], os.path.getsize(path), self.cfg, self.log)
+                fileSize = os.path.getsize(path)
+                if fileSize == c['clientSize']:
+                    dta = {'status': 'fail', 'msg': f"File '{fileName}' exists with full size in local directory (or has size zero)"}
+                    self.sendEncryptedResponse(dta, key, serverSocket, addr, useRaw=True)
+                    self.log.warn(dta['msg'])
+                    return
+                else:
+                    c['getinProgress'] = True
+                    c['file'] = fileName
+                    c['fileHolder'] = FileHolderServer(path, c['clientSize'], fileSize, self.cfg, self.log)
+        fileSize = os.path.getsize(path)
         fileHolder = c['fileHolder']
-        dta = {}
-        dta['status'] = 'ok'
-        dta['op'] = "chunk"
-        path = os.path.join(c['outgoing'], fileName)
-        dta['totalSize'] = os.path.getsize(path)
-        dta['size'] = fileHolder.chunkSize
-        estChunkCount = int((dta['totalSize'] - c['clientSize']) / dta['size'])
+        dta = {'status': 'ok', 'op': "chunk"}
+        estChunkCount = int((fileSize - c['clientSize']) / self.cfg.general_chunkSize)
         if logInfo:
             if c['clientSize'] == 0:
-                self.log.debug(f"Sending file {path} with size {dta['totalSize']} in {estChunkCount} pieces.")
+                self.log.debug(f"Sending file {path} with size {fileSize} in {estChunkCount} pieces.")
             else:
-                self.log.debug(f"Resuming file {path} with remaing size {dta['totalSize']-c['clientSize']} in {estChunkCount} pieces.")
+                self.log.debug(f"Resuming file {path} with remaining size {dta['totalSize']-c['clientSize']} in {estChunkCount} pieces.")
         if fileHolder.reachedTimeout():
             self.log.error("Client disappeared, cancelling transmission")
             c['getinProgress'] = False
@@ -239,6 +240,7 @@ class Sender:
             dta['idx'] = nxt
             self.sndCnt += 1
             if interval == 0:
+                dta['totalSize'] = fileSize
                 dta['sndCnt'] = self.sndCnt
                 dta['rcvCnt'] = self.rcvCnt
                 if fileHolder.md5sum is not None:
@@ -297,14 +299,21 @@ class Sender:
             break
         return clients
 
-    def sendEncryptedResponse(self, jsonData, key, serverSocket, addr):
+    @staticmethod
+    def sendEncryptedResponse(jsonData, key, serverSocket, addr, useRaw=False):
+        sockWt = SockWrite()
         strg = json.dumps(jsonData)
         bts = strg.encode('UTF-8')
-        raw = Sender.pad(bts)
+        if useRaw:
+            buffer = io.BytesIO()
+            sockWt.writeLongDirect(len(bts), buffer)
+            buffer.write(bts)
+            raw = Sender.pad(buffer.getbuffer().tobytes())
+        else:
+            raw = Sender.pad(bts)
         iv = Random.new().read(AES.block_size)
         cipher = AES.new(key, AES.MODE_CBC, iv)
         cipherText = cipher.encrypt(raw)
-        sockWt = SockWrite()
         buffer = io.BytesIO()
         buffer.write(iv)
         sockWt.writeLongDirect(len(cipherText), buffer)
