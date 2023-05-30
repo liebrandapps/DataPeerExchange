@@ -104,5 +104,3 @@ if __name__ == "__main__":
         if len(sys.argv) < 3:
             print("'update' requires at least one file name as argument")
             sys.exit(-1)
-
-        rcv.op("get", sys.argv[2:])

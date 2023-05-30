@@ -56,9 +56,8 @@ class Receiver:
         if op == Receiver.OP_GET:
             self.get(data)
 
-        if op ==Receiver.OP_GET_ALL:
+        if op == Receiver.OP_GET_ALL:
             self.getAll()
-
 
     def getKey(self):
         if not (os.path.isdir(self.cfg.general_exchangeKeyDir)):
@@ -209,7 +208,7 @@ class Receiver:
             fileHolder = FileHolderClient(localFile)
             cnt = 1000
             start = datetime.datetime.now()
-            #lastStat = start
+            # lastStat = start
             timeNeeded = None
             retry = 5
             rcvCnt = 0
@@ -250,7 +249,7 @@ class Receiver:
                             packets {rsp['rcvCnt']} of {sndCnt}") """
                             if 'md5' in rsp.keys():
                                 fileHolder.md5Svr = rsp['md5']
-                            fileData = rawData[4+dctLength:]
+                            fileData = rawData[4 + dctLength:]
                             fileHolder.addChunk(partIdx, fileData, totalSize=totalSize)
                             done = fileHolder.isComplete()
                             ack = fileHolder.getAck()
