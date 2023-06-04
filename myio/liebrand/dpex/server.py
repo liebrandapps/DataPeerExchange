@@ -11,6 +11,7 @@ from logging.handlers import RotatingFileHandler
 from os.path import join, exists
 
 from myio.liebrand.dpex.config import Config
+from myio.liebrand.dpex.daemon import Daemon
 from myio.liebrand.dpex.sender import Sender
 
 APP = "dpexServer"
@@ -51,7 +52,8 @@ if __name__ == "__main__":
             "serverPort": ["Integer", 0],
             "chunkSize": ["Integer", 768],
             "maxChunks": ["Integer", 100000],
-            "timeout": ["Integer", 30]
+            "timeout": ["Integer", 30],
+            "pidFile": ["String", "/tmp/" + APP + ".pid"],
         },
         "logging": {
             "logFile": ["String", "/tmp/dpexServer.log"],
@@ -66,20 +68,24 @@ if __name__ == "__main__":
         print("[%s] No config file %s found at %s, using defaults" % (APP, CONFIG_FILE, CONFIG_DIR))
     cfg = Config(path)
     cfg.addScope(initialConfig)
+
+    if len(sys.argv) > 1:
+        todo = sys.argv[1]
+        if todo in ['start', 'stop', 'restart', 'status']:
+            runAsDaemon = True
+            pidFile = cfg.general_pidFile
+            logFile = cfg.logging_logFile
+            d = Daemon(pidFile, APP, logFile)
+            d.startstop(todo, stdout=logFile, stderr=logFile)
+
     log = setupLogger()
     if log is None:
         sys.exit(-126)
 
     sdr = Sender(cfg, log)
-
     sdr.op("init")
 
-    if len(sys.argv) < 2:
-        print("You must provide at least on argument as operation")
-        sys.exit(-1)
-
-    op = sys.argv[1]
-    if op.lower() == "add":
+    if len(sys.argv)>1 and sys.argv[1].lower() == "add":
         if len(sys.argv) < 3:
             print("'add' requires name of json file as argument")
             sys.exit(-1)
@@ -92,6 +98,5 @@ if __name__ == "__main__":
         with open(flName) as fp:
             dta = json.load(fp)
         sdr.op("add", dta)
-
-    if op.lower() == "serve":
+    else:
         sdr.serve()

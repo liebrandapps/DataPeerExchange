@@ -59,10 +59,11 @@ The received JSON data should be saved to a file (e.g. sampleServer.json).
 Now the client is configured to run with the server.
 
 Step 5 [Server]:
-Start the server with parameter "serve" and leave it running:
+Start the server (in the background, as daemon) with parameter "start":
 
-    python3 myio/liebrand/dpex/server.py serve
+    python3 myio/liebrand/dpex/server.py start
 
+The server can be stopped using "stop" as a parameter.  
 
 Step 6 [Client]:
 Retrieve list of available files:
