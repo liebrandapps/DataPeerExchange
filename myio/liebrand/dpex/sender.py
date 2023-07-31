@@ -20,7 +20,7 @@ from Crypto.Cipher import PKCS1_OAEP, AES
 from Crypto.PublicKey import RSA
 
 from myio.liebrand.dpex.fileholder import FileHolderServer
-from myio.liebrand.dpex.utility import ReadDictionary, SockRead, SockWrite
+from myio.liebrand.dpex.utility import SockRead, SockWrite
 
 
 class Sender:
@@ -71,7 +71,7 @@ class Sender:
                 os.remove(publicKeyFile)
 
         if not (os.path.exists(publicKeyFile)):
-            with(open(publicKeyFile, 'wb')) as fp:
+            with (open(publicKeyFile, 'wb')) as fp:
                 key.public_key().exportKey('OpenSSH')
         return key
 
@@ -96,7 +96,7 @@ class Sender:
             os.remove(clientPublicKeyFile)
         pK = base64.b64decode(clientPublicKeyStrg)
         publicKey = RSA.importKey(pK)
-        with(open(clientPublicKeyFile, 'wb')) as fp:
+        with (open(clientPublicKeyFile, 'wb')) as fp:
             fp.write(publicKey.exportKey('OpenSSH'))
 
         outgoingDir = os.path.join(clientWorkDir, "outgoing")
@@ -158,7 +158,6 @@ class Sender:
             unpad = lambda s: s[:-ord(s[len(s) - 1:])]
             raw = unpad(decData)
             req = json.loads(raw)
-            rsp = {}
             if req['op'] == 'ls':
                 self.processls(key, c, serverSocket, addr)
             if req['op'] == 'get':
@@ -211,11 +210,13 @@ class Sender:
                     c['getinProgress'] = True
                     c['file'] = fileName
                     c['fileHolder'] = FileHolderServer(path, c['clientSize'], fileSize, self.cfg, self.log)
+                    c['sndCnt'] = 0
         fileSize = os.path.getsize(path)
         fileHolder = c['fileHolder']
         dta = {'status': 'ok', 'op': "chunk"}
         estChunkCount = int((fileSize - c['clientSize']) / self.cfg.general_chunkSize)
         if logInfo:
+            c['estChunkCount'] = estChunkCount
             if c['clientSize'] == 0:
                 self.log.debug(f"Sending file {path} with size {fileSize} in {estChunkCount} pieces.")
             else:
@@ -235,7 +236,7 @@ class Sender:
                 c['getinProgress'] = False
                 del c['file']
                 del c['fileHolder']
-                self.log.debug(f"Done with sending file {path}")
+                self.log.debug(f"Done with sending file {path}, actual pieces {c['estChunkCount']}, transferred {c['sndCnt']}")
                 break
             dta['idx'] = nxt
             self.sndCnt += 1
@@ -262,6 +263,7 @@ class Sender:
             sockWt.writeLongDirect(len(cipherText), buffer)
             buffer.write(cipherText)
             serverSocket.sendto(buffer.getbuffer(), addr)
+            c['sndCnt'] += 1
             interval += 1
             if self.delay > 0.0:
                 time.sleep(self.delay / 1000000)

@@ -76,8 +76,7 @@ if __name__ == "__main__":
 
     if op.lower() == "init":
         rcv.op("init")
-
-    if op.lower() == "update":
+    elif op.lower() == "update":
         if len(sys.argv) < 3:
             print("'update' requires name of json file as argument")
             sys.exit(-1)
@@ -90,17 +89,13 @@ if __name__ == "__main__":
         with open(flName) as fp:
             dta = json.load(fp)
         rcv.op("update", dta)
-
-    if op.lower() == "ls":
+    elif op.lower() == "ls":
         rcv.op("ls")
-
-    if op.lower() == "get":
+    elif op.lower() == "get":
         rcv.op("get", sys.argv[2:])
-
-    if op.lower() == "getall":
+    elif op.lower() == "getall":
         rcv.op("getall")
-
-    if op.lower() == "update":
+    elif op.lower() == "update":
         if len(sys.argv) < 3:
             print("'update' requires at least one file name as argument")
             sys.exit(-1)

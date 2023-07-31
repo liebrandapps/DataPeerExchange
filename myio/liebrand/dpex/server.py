@@ -85,7 +85,7 @@ if __name__ == "__main__":
     sdr = Sender(cfg, log)
     sdr.op("init")
 
-    if len(sys.argv)>1 and sys.argv[1].lower() == "add":
+    if len(sys.argv) > 1 and sys.argv[1].lower() == "add":
         if len(sys.argv) < 3:
             print("'add' requires name of json file as argument")
             sys.exit(-1)

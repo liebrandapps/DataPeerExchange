@@ -32,31 +32,28 @@ class Receiver:
     OP_GET = "get"
     OP_GET_ALL = "getall"
 
+    unpad = lambda s: s[:-ord(s[len(s) - 1:])]
+
     def __init__(self, cfg, log):
         self.cfg = cfg
         self.log = log
 
     def op(self, op, data=None):
+
         if op == Receiver.OP_INIT:
             key = self.getKey()
             uid = self.getUID()
-            dct = {}
-            dct['uid'] = uid
-            dct['publicKey'] = base64.b64encode(key.public_key().exportKey()).decode('UTF-8')
+            dct = {'uid': uid, 'publicKey': base64.b64encode(key.public_key().exportKey()).decode('UTF-8')}
             strg = json.dumps(dct)
             print("Send the following json (e.g. via mail) to the provider of the server")
             print(strg)
-
-        if op == Receiver.OP_UPDATE:
+        elif op == Receiver.OP_UPDATE:
             self.update(data)
-
-        if op == Receiver.OP_LS:
+        elif op == Receiver.OP_LS:
             self.ls()
-
-        if op == Receiver.OP_GET:
+        elif op == Receiver.OP_GET:
             self.get(data)
-
-        if op == Receiver.OP_GET_ALL:
+        elif op == Receiver.OP_GET_ALL:
             self.getAll()
 
     def getKey(self):
@@ -82,7 +79,7 @@ class Receiver:
                 os.remove(publicKeyFile)
 
         if not (os.path.exists(publicKeyFile)):
-            with(open(publicKeyFile, 'wb')) as fp:
+            with (open(publicKeyFile, 'wb')) as fp:
                 fp.write(key.public_key().exportKey('OpenSSH'))
         return key
 
@@ -140,10 +137,11 @@ class Receiver:
         clientSocket.settimeout(5.0)
         addr = (cfgData['host'], cfgData['port'])
         clientSocket.sendto(buffer.getbuffer(), addr)
+        sockRd = SockRead()
         try:
-            msg, addr = clientSocket.recvfrom(1024)
+            msg, addr = clientSocket.recvfrom(8192)
         except socket.timeout:
-            self.log.error("Server did not respond")
+            self.log.error("Server did not respond (timeout)")
             return None
         return self.__decHelper(key, msg)
 
@@ -244,8 +242,8 @@ class Receiver:
                                 totalSize = rsp['totalSize']
                             else:
                                 totalSize = None
-                            """now = datetime.datetime.now() if (now - lastStat).seconds > 30: lastStat = now print( 
-                            f"Incoming packets Client received {rcvCnt} of {rsp['sndCnt']}, Server received Ack 
+                            """now = datetime.datetime.now() if (now - lastStat).seconds > 30: lastStat = now print(
+                            f"Incoming packets Client received {rcvCnt} of {rsp['sndCnt']}, Server received Ack
                             packets {rsp['rcvCnt']} of {sndCnt}") """
                             if 'md5' in rsp.keys():
                                 fileHolder.md5Svr = rsp['md5']
@@ -307,8 +305,7 @@ class Receiver:
         cipherText = msg[20:20 + length]
         cipher = AES.new(key, AES.MODE_CBC, iv)
         bts = cipher.decrypt(cipherText)
-        unpad = lambda s: s[:-ord(s[len(s) - 1:])]
-        raw = unpad(bts)
+        raw = Receiver.unpad(bts)
         return json.loads(raw)
 
     @staticmethod
@@ -319,14 +316,12 @@ class Receiver:
         cipherText = msg[20:20 + length]
         cipher = AES.new(key, AES.MODE_CBC, iv)
         bts = cipher.decrypt(cipherText)
-        unpad = lambda s: s[:-ord(s[len(s) - 1:])]
-        raw = unpad(bts)
+        raw = Receiver.unpad(bts)
         return raw
 
     @staticmethod
     def printProgress(percToDisk, percInMem):
-        line = []
-        line.append("[")
+        line = ["["]
         for idx in range(100):
             if idx <= percToDisk:
                 line.append("X")
